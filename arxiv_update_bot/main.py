@@ -1,10 +1,11 @@
 import argparse
 import configparser
-
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 import feedparser
 import telebot
 
-DEFAULT_CONFIGURATION_PATH = "/etc/arxiv-update-bot/config.ini"
+DEFAULT_CONFIGURATION_PATH = "config.ini"
 
 
 def load_config(path):
@@ -53,6 +54,7 @@ def load_config(path):
                     "category": current_section["category"],
                     "chat_id": current_section["chat_id"],
                     "buzzwords": current_section["buzzwords"].split(","),
+                    "authors": current_section["authors"].split(","),
                 }
             )
     return token, updates
@@ -74,10 +76,15 @@ def get_articles(category, buzzwords):
     news_feed = feedparser.parse(f"http://export.arxiv.org/rss/{category}")
     res = []
     for entry in news_feed.entries:
-        for buzzword in buzzwords:
-            if buzzword in entry.title.lower():
-                res.append(entry)
-
+        for buzzword in buzzwords["article"]:
+            #Test authors
+            if  fuzz.partial_ratio(buzzword, entry.title) > 90 or fuzz.partial_ratio(buzzword, entry.summary ) > 90:
+                if entry not in res:
+                    res.append(entry)
+        for author in buzzwords["authors"]:
+            if fuzz.partial_ratio(author, entry.authors) > 90:
+                if entry not in res:
+                    res.append(entry)
     return res
 
 
@@ -105,9 +112,11 @@ def send_articles(bot, chat_id, category, buzzwords, quiet=False):
             text=f"You are going to be happy. I found {len(articles)} article(s) of potential interest.",
         )
         for article in articles:
+            processed_summary = article.summary.replace("\n"," ").replace("<p>","").replace("</p>","")
+            print(processed_summary)
             bot.send_message(
                 chat_id,
-                text=f"<strong>Title</strong>: {article.title}\n<strong>Authors</strong>: {article.authors[0]['name']}\n<strong>Link</strong>: {article.id}",
+                text=f"<strong>Title</strong>: {article.title}\n<strong>Authors</strong>: {article.authors[0]['name']}\n<strong>Link</strong>: {article.id}\n<strong>Abstract:</strong>\n{processed_summary}"
             )
 
 
@@ -132,12 +141,15 @@ def main():
     quiet = args.quiet
 
     token, updates = load_config(config_path)
+    
 
+    
     bot = telebot.TeleBot(token, parse_mode="HTML")
 
     for update in updates:
+        buzzwords = {"authors": update["authors"], "article" : update["buzzwords"]}
         send_articles(
-            bot, update["chat_id"], update["category"], update["buzzwords"], quiet=quiet
+            bot, update["chat_id"], update["category"], buzzwords, quiet=quiet
         )
 
 
