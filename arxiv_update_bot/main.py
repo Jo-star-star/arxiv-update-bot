@@ -1,11 +1,18 @@
+#!/usr/bin/python3
 import argparse
 import configparser
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 import feedparser
 import telebot
+from datetime import datetime
 
-DEFAULT_CONFIGURATION_PATH = "config.ini"
+date = datetime.now()
+if date.strftime('%A') in ["Saturday", "Sunday"]:
+    print("C'est le week-end!")
+    exit(0);
+
+DEFAULT_CONFIGURATION_PATH = "/home/jo/Config/aub.config.ini"
 
 
 def load_config(path):
@@ -51,7 +58,7 @@ def load_config(path):
                 )
             updates.append(
                 {
-                    "category": current_section["category"],
+                    "category": current_section["category"].split(","),
                     "chat_id": current_section["chat_id"],
                     "buzzwords": current_section["buzzwords"].split(","),
                     "authors": current_section["authors"].split(","),
@@ -59,6 +66,8 @@ def load_config(path):
             )
     return token, updates
 
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 
 def get_articles(category, buzzwords):
     """Get the articles from arXiv.
@@ -75,20 +84,23 @@ def get_articles(category, buzzwords):
     """
     news_feed = feedparser.parse(f"http://export.arxiv.org/rss/{category}")
     res = []
+    #print(news_feed)
     for entry in news_feed.entries:
+        #print(entry)
         for buzzword in buzzwords["article"]:
             #Test authors
             if  fuzz.partial_ratio(buzzword, entry.title) > 90 or fuzz.partial_ratio(buzzword, entry.summary ) > 90:
                 if entry not in res:
                     res.append(entry)
         for author in buzzwords["authors"]:
+            #print(author)
             if fuzz.partial_ratio(author, entry.authors) > 90:
                 if entry not in res:
                     res.append(entry)
     return res
 
 
-def send_articles(bot, chat_id, category, buzzwords, quiet=False):
+def send_articles(bot, chat_id, categories, buzzwords, quiet=False):
     """Send the articles to telegram.
 
     Args:
@@ -98,7 +110,12 @@ def send_articles(bot, chat_id, category, buzzwords, quiet=False):
         buzzwords (list): list of buzzwords.
         quiet (bool, optional): whether to send a messae when no article is found. Defaults to False.
     """
-    articles = get_articles(category, buzzwords)
+    articles = [] 
+    for category in categories:
+        results = get_articles(category, buzzwords)
+        for entry in results:
+            articles.append(entry)
+    print(articles)
 
     if not articles:
         if not quiet:
@@ -138,15 +155,17 @@ def main():
     )
     args = parser.parse_args()
     config_path = args.config_path or DEFAULT_CONFIGURATION_PATH
+    print(f"Config path:{config_path}\n")
     quiet = args.quiet
 
     token, updates = load_config(config_path)
-    
+    print(token, updates) 
 
     
     bot = telebot.TeleBot(token, parse_mode="HTML")
 
     for update in updates:
+        print(bot)
         buzzwords = {"authors": update["authors"], "article" : update["buzzwords"]}
         send_articles(
             bot, update["chat_id"], update["category"], buzzwords, quiet=quiet
