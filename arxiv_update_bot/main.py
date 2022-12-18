@@ -10,7 +10,7 @@ from datetime import datetime
 date = datetime.now()
 if date.strftime('%A') in ["Saturday", "Sunday"]:
     print("C'est le week-end!")
-    exit(0);
+    #exit(0);
 
 DEFAULT_CONFIGURATION_PATH = "/home/jo/Config/aub.config.ini"
 
@@ -114,7 +114,8 @@ def send_articles(bot, chat_id, categories, buzzwords, quiet=False):
     for category in categories:
         results = get_articles(category, buzzwords)
         for entry in results:
-            articles.append(entry)
+            if entry not in articles:
+                articles.append(entry)
     print(articles)
 
     if not articles:
