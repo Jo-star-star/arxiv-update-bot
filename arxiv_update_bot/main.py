@@ -10,7 +10,7 @@ from datetime import datetime
 date = datetime.now()
 if date.strftime('%A') in ["Saturday", "Sunday"]:
     print("C'est le week-end!")
-    #exit(0);
+    exit(0);
 
 DEFAULT_CONFIGURATION_PATH = "/home/jo/Config/aub.config.ini"
 
